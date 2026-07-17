@@ -269,9 +269,12 @@ def build_rollout_context(
     #         )
 
     # --- 4. Features + action-key reconciliation ---------------------
-    # TODO(Steven):Only ``.pos`` joint features are routed to the policy as state and as the
-    # action target; velocity and torque channels (when present) are kept in
-    # the raw observation but excluded from the policy-facing tensors.
+    # TODO(Steven): velocity and torque channels (when present) are kept in
+    # the raw observation but excluded from the policy-facing tensors. All
+    # other scalar features (e.g. third-party sensor channels such as tactile)
+    # are routed to the policy as state, matching what lerobot-record puts in
+    # ``observation.state`` — record and rollout must agree or policies
+    # trained on recorded data get a state-dim mismatch at inference.
     all_obs_features = robot.observation_features
     # ``observation_features`` values are either a tuple (camera shape) or the
     # ``float`` type itself used as a sentinel for scalar motor features —
@@ -279,7 +282,7 @@ def build_rollout_context(
     observation_features_hw = {
         k: v
         for k, v in all_obs_features.items()
-        if isinstance(v, tuple) or (v is float and k.endswith(".pos"))
+        if isinstance(v, tuple) or (v is float and not k.endswith((".vel", ".torque")))
     }
     action_features_hw = {k: v for k, v in robot.action_features.items() if k.endswith(".pos")}
 
