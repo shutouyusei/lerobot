@@ -411,22 +411,22 @@ def build_rollout_context(
     #         )
 
     # --- 4. Features + action-key reconciliation ---------------------
-    # TODO(Steven):Only ``.pos`` joint features are routed to the policy as state and as the
-    # action target; velocity and torque channels (when present) are kept in
-    # the raw observation but excluded from the policy-facing tensors.
+    # Route every scalar (``float``) observation feature except torque to the
+    # policy as state. lerobot-record builds ``observation.state`` from all
+    # scalar features a robot exposes, so record and rollout must agree or a
+    # policy trained on recorded data gets a state-dim mismatch in the
+    # normalizer at inference. This covers joint positions (.pos), base
+    # velocities (.vel — LeKiwi's 9-dim state), and third-party sensor channels
+    # such as tactile arrays. Torque is the only channel still kept out of the
+    # policy-facing tensors (TODO(Steven)).
     all_obs_features = robot.observation_features
     # ``observation_features`` values are either a tuple (camera shape) or the
     # ``float`` type itself used as a sentinel for scalar motor features —
     # see ``dict[str, type | tuple]`` annotation on ``Robot.observation_features``.
-    # Keep cameras (tuple) plus both joint-position (.pos) and base-velocity (.vel)
-    # scalar state features. LeKiwi's observation.state is 9-dim (6 arm .pos +
-    # x/y/theta.vel) and the policy was trained/normalized on all 9; the old .pos-only
-    # filter fed a 6-dim state into a 9-dim normalizer → RuntimeError (size 6 vs 9).
-    # Pure-arm robots have no .vel state keys, so this is a no-op for them.
     observation_features_hw = {
         k: v
         for k, v in all_obs_features.items()
-        if isinstance(v, tuple) or (v is float and k.endswith((".pos", ".vel")))
+        if isinstance(v, tuple) or (v is float and not k.endswith(".torque"))
     }
     policy_action_names = getattr(policy_config, "action_feature_names", None)
     observation_features_hw = _align_state_feature_order(
