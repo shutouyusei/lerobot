@@ -163,7 +163,7 @@ def teleop_loop(
         # given that it is the identity processor as default
         obs = robot.get_observation()
 
-        if robot.name == "unitree_g1":
+        if robot.name == "unitree_g1" or getattr(teleop, "use_send_feedback", False):
             teleop.send_feedback(obs)
 
         # Get teleop action
