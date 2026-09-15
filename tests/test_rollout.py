@@ -1284,3 +1284,43 @@ def test_episodic_run_reports_a_summary_per_episode_and_for_the_run(caplog):
     # Recording still lands once per interpolation cycle over the 8 ticks.
     assert _recorded_actions(dataset) == [1.0, 2.0, 3.0, 4.0]
     assert not _timer_warnings(caplog)
+
+
+def test_build_rollout_context_routes_env_robot_features_to_environment_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import lerobot.rollout.context as rollout_context
+    from lerobot.configs import FeatureType, PolicyFeature
+    from lerobot.policies.act.configuration_act import ACTConfig
+    from lerobot.processor import PolicyProcessorPipeline
+    from lerobot.rollout import RolloutConfig
+    from lerobot.utils.constants import OBS_ENV_STATE, OBS_STATE
+    from tests.mocks.mock_robot import MockRobot, MockRobotConfig
+
+    class TactileMockRobot(MockRobot):
+        @property
+        def observation_features(self) -> dict:
+            tactile = {f"tactile0.{ax}": PolicyFeature(type=FeatureType.ENV, shape=(1,)) for ax in "xyz"}
+            return {**super().observation_features, **tactile}
+
+    policy_config = ACTConfig(device="cpu", pretrained_path=Path("unused-checkpoint"))
+    robot_config = MockRobotConfig(random_values=False, static_values=[0.0, 0.0, 0.0])
+    cfg = RolloutConfig(robot=robot_config, policy=policy_config, device="cpu")
+    robot = TactileMockRobot(robot_config)
+
+    monkeypatch.setattr(rollout_context, "_load_pretrained_policy", lambda _: torch.nn.Linear(3, 3))
+    monkeypatch.setattr(
+        rollout_context,
+        "make_pre_post_processors",
+        lambda **_: (PolicyProcessorPipeline(steps=[]), PolicyProcessorPipeline(steps=[])),
+    )
+    monkeypatch.setattr(rollout_context, "make_robot_from_config", lambda _: robot)
+
+    try:
+        ctx = rollout_context.build_rollout_context(cfg, threading.Event())
+        assert ctx.data.hw_features[OBS_STATE]["names"] == ["motor_1.pos", "motor_2.pos", "motor_3.pos"]
+        assert ctx.data.hw_features[OBS_ENV_STATE]["names"] == ["tactile0.x", "tactile0.y", "tactile0.z"]
+        assert ctx.data.dataset_features[OBS_ENV_STATE]["shape"] == (3,)
+    finally:
+        if robot.is_connected:
+            robot.disconnect()
