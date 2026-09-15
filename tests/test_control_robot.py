@@ -279,7 +279,9 @@ def _capture_episode_hooks(monkeypatch):
     monkeypatch.setattr(
         MockRobot, "on_episode_start", lambda self, index, root: calls.append(("start", index, root))
     )
-    monkeypatch.setattr(MockRobot, "on_episode_end", lambda self, saved: calls.append(("end", saved)))
+    monkeypatch.setattr(
+        MockRobot, "on_episode_end", lambda self, saved, num_frames: calls.append(("end", saved, num_frames))
+    )
     return calls
 
 
@@ -290,7 +292,11 @@ def test_record_calls_episode_hooks_around_each_saved_episode(tmp_path, monkeypa
     dataset = record(cfg)
 
     root = dataset.root
-    assert calls == [("start", 0, root), ("end", True), ("start", 1, root), ("end", True)]
+    assert [c[:2] for c in calls] == [("start", 0), ("end", True), ("start", 1), ("end", True)]
+    assert calls[0][2] == calls[2][2] == root
+    ends = [c[2] for c in calls if c[0] == "end"]
+    assert all(n > 0 for n in ends)
+    assert sum(ends) == dataset.num_frames
 
 
 def test_record_reports_a_rerecorded_episode_as_not_saved(tmp_path, monkeypatch):
@@ -302,5 +308,11 @@ def test_record_reports_a_rerecorded_episode_as_not_saved(tmp_path, monkeypatch)
     dataset = record(cfg)
 
     root = dataset.root
-    assert calls == [("start", 0, root), ("end", False), ("start", 0, root), ("end", True)]
+    assert calls == [
+        ("start", 0, root),
+        ("end", False, 0),
+        ("start", 0, root),
+        ("end", True, dataset.num_frames),
+    ]
+    assert dataset.num_frames > 0
     assert dataset.num_episodes == 1

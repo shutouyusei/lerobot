@@ -540,13 +540,14 @@ def record(
                     events["rerecord_episode"] = False
                     events["exit_early"] = False
                     dataset.clear_episode_buffer()
-                    robot.on_episode_end(saved=False)
+                    robot.on_episode_end(saved=False, num_frames=0)
                     timer.log_episode_summary("discarded episode")
                     timer.restart()
                     continue
 
+                num_frames = dataset.writer.episode_buffer["size"]
                 dataset.save_episode()
-                robot.on_episode_end(saved=True)
+                robot.on_episode_end(saved=True, num_frames=num_frames)
                 recorded_episodes += 1
                 # Close the window on the episode just saved.  The digest is emitted on
                 # the next episode's first tick, so the reset phase, `save_episode` and

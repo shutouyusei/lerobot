@@ -219,13 +219,18 @@ class Robot(abc.ABC):
         """
         pass
 
-    def on_episode_end(self, saved: bool) -> None:  # noqa: B027 - optional hook
+    def on_episode_end(self, saved: bool, num_frames: int) -> None:  # noqa: B027 - optional hook
         """
         Called by recording scripts once the episode started by :pymeth:`on_episode_start` is over.
+
+        The recording script may keep driving the robot between the episode and this call
+        (the reset phase), so observations read after the ``num_frames``-th one are not
+        frames of the episode.
 
         Args:
             saved (bool): True if the episode was saved to the dataset, False if it was discarded
                 (e.g. re-recorded) and its index will be reused.
+            num_frames (int): Number of frames the dataset kept for the episode, 0 when discarded.
         """
         pass
 
