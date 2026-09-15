@@ -495,6 +495,7 @@ def record(
             while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
                 episode_index = dataset.num_episodes
                 log_say(f"Recording episode {episode_index}", cfg.play_sounds)
+                robot.on_episode_start(episode_index, dataset.root)
                 record_loop(
                     robot=robot,
                     events=events,
@@ -539,11 +540,13 @@ def record(
                     events["rerecord_episode"] = False
                     events["exit_early"] = False
                     dataset.clear_episode_buffer()
+                    robot.on_episode_end(saved=False)
                     timer.log_episode_summary("discarded episode")
                     timer.restart()
                     continue
 
                 dataset.save_episode()
+                robot.on_episode_end(saved=True)
                 recorded_episodes += 1
                 # Close the window on the episode just saved.  The digest is emitted on
                 # the next episode's first tick, so the reset phase, `save_episode` and

@@ -205,6 +205,30 @@ class Robot(abc.ABC):
         """
         pass
 
+    def on_episode_start(self, episode_index: int, root: Path) -> None:  # noqa: B027 - optional hook
+        """
+        Called by recording scripts just before an episode starts being recorded.
+
+        Robots that keep side data outside the dataset (e.g. a sensor sampled faster
+        than the recording rate) can use this to open a per-episode sink. The default
+        does nothing.
+
+        Args:
+            episode_index (int): Index the episode will have in the dataset if it is saved.
+            root (Path): Local root directory of the dataset being recorded.
+        """
+        pass
+
+    def on_episode_end(self, saved: bool) -> None:  # noqa: B027 - optional hook
+        """
+        Called by recording scripts once the episode started by :pymeth:`on_episode_start` is over.
+
+        Args:
+            saved (bool): True if the episode was saved to the dataset, False if it was discarded
+                (e.g. re-recorded) and its index will be reused.
+        """
+        pass
+
     @abc.abstractmethod
     def disconnect(self) -> None:
         """Disconnect from the robot and perform any necessary cleanup."""

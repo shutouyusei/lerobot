@@ -253,3 +253,54 @@ def test_record_loop_without_a_teleoperator_paces_and_terminates():
 
     # 0.1 s at 30 Hz is 3 ticks; the upper bound is what proves the phase was paced.
     assert 1 <= calls <= 6
+
+
+def _record_cfg_for_hooks(tmp_path, num_episodes):
+    return RecordConfig(
+        robot=MockRobotConfig(),
+        teleop=MockTeleopConfig(),
+        dataset=DatasetRecordConfig(
+            repo_id=DUMMY_REPO_ID,
+            single_task="Dummy task",
+            root=tmp_path / "record",
+            num_episodes=num_episodes,
+            episode_time_s=0.1,
+            reset_time_s=0,
+            push_to_hub=False,
+        ),
+        play_sounds=False,
+    )
+
+
+def _capture_episode_hooks(monkeypatch):
+    from tests.mocks.mock_robot import MockRobot
+
+    calls = []
+    monkeypatch.setattr(
+        MockRobot, "on_episode_start", lambda self, index, root: calls.append(("start", index, root))
+    )
+    monkeypatch.setattr(MockRobot, "on_episode_end", lambda self, saved: calls.append(("end", saved)))
+    return calls
+
+
+def test_record_calls_episode_hooks_around_each_saved_episode(tmp_path, monkeypatch):
+    calls = _capture_episode_hooks(monkeypatch)
+    cfg = _record_cfg_for_hooks(tmp_path, num_episodes=2)
+
+    dataset = record(cfg)
+
+    root = dataset.root
+    assert calls == [("start", 0, root), ("end", True), ("start", 1, root), ("end", True)]
+
+
+def test_record_reports_a_rerecorded_episode_as_not_saved(tmp_path, monkeypatch):
+    calls = _capture_episode_hooks(monkeypatch)
+    events = {"exit_early": False, "rerecord_episode": True, "stop_recording": False}
+    monkeypatch.setattr("lerobot.scripts.lerobot_record.init_keyboard_listener", lambda: (None, events))
+    cfg = _record_cfg_for_hooks(tmp_path, num_episodes=1)
+
+    dataset = record(cfg)
+
+    root = dataset.root
+    assert calls == [("start", 0, root), ("end", False), ("start", 0, root), ("end", True)]
+    assert dataset.num_episodes == 1
