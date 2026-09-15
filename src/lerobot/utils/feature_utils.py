@@ -57,7 +57,8 @@ def hw_to_dataset_features(
 
     Args:
         hw_features (dict): Dictionary mapping feature names to their type (float for
-            joints) or shape (tuple for images).
+            joints, ``PolicyFeature(type=ENV)`` for scalars that belong in
+            ``observation.environment_state``) or shape (tuple for images).
         prefix (str): The prefix to add to the feature keys (e.g., "observation"
             or "action").
         use_video (bool): If True, image features are marked as "video", otherwise "image".
@@ -66,11 +67,19 @@ def hw_to_dataset_features(
         dict: A LeRobot features dictionary. Depth cameras carry ``info["is_depth_map"] = True``.
     """
     features = {}
+    # Scalars a robot declares as ``PolicyFeature(type=ENV)`` (e.g. a tactile array) get their own
+    # ``observation.environment_state`` vector instead of being folded into ``observation.state``.
+    env_fts = {
+        key: ftype
+        for key, ftype in hw_features.items()
+        if isinstance(ftype, PolicyFeature) and ftype.type == FeatureType.ENV
+    }
     joint_fts = {
         key: ftype
         for key, ftype in hw_features.items()
         if ftype is float or (isinstance(ftype, PolicyFeature) and ftype.type != FeatureType.VISUAL)
     }
+    joint_fts = {key: ftype for key, ftype in joint_fts.items() if key not in env_fts}
     # TODO(CarolinePascal): we should not rely on the shape to determine if a feature is a camera !
     cam_fts = {key: shape for key, shape in hw_features.items() if isinstance(shape, tuple)}
 
@@ -86,6 +95,13 @@ def hw_to_dataset_features(
             "dtype": "float32",
             "shape": (len(joint_fts),),
             "names": list(joint_fts),
+        }
+
+    if env_fts and prefix == OBS_STR:
+        features[OBS_ENV_STATE] = {
+            "dtype": "float32",
+            "shape": (len(env_fts),),
+            "names": list(env_fts),
         }
 
     for key, shape in cam_fts.items():
