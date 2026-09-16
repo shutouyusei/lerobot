@@ -219,6 +219,18 @@ class Robot(abc.ABC):
         """
         pass
 
+    def on_frame_recorded(self, frame_index: int) -> None:  # noqa: B027 - optional hook
+        """
+        Called by recording scripts right after a frame of the current episode is added to the
+        dataset. Not called for observations that are read but not stored (e.g. while the
+        environment is being reset between episodes), so a robot keeping side data can commit
+        exactly what the dataset keeps.
+
+        Args:
+            frame_index (int): Index of the frame within the episode, starting at 0.
+        """
+        pass
+
     def on_episode_end(self, saved: bool) -> None:  # noqa: B027 - optional hook
         """
         Called by recording scripts once the episode started by :pymeth:`on_episode_start` is over.

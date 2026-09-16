@@ -362,6 +362,7 @@ def record_loop(
                 action_frame = build_dataset_frame(dataset.features, action_values, prefix=ACTION)
                 frame = {**observation_frame, **action_frame, "task": single_task}
                 dataset.add_frame(frame)
+                robot.on_frame_recorded(dataset.writer.episode_buffer["size"] - 1)
 
         if display_data:
             with timer.section("telemetry"):
