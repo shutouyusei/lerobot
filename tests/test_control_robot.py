@@ -279,8 +279,22 @@ def _capture_episode_hooks(monkeypatch):
     monkeypatch.setattr(
         MockRobot, "on_episode_start", lambda self, index, root: calls.append(("start", index, root))
     )
+    monkeypatch.setattr(MockRobot, "on_frame_recorded", lambda self, index: calls.append(("frame", index)))
     monkeypatch.setattr(MockRobot, "on_episode_end", lambda self, saved: calls.append(("end", saved)))
     return calls
+
+
+def _episodes(calls):
+    """Split the hook log into per-episode (start, [frame indices], end) tuples."""
+    episodes = []
+    for call in calls:
+        if call[0] == "start":
+            episodes.append([call, []])
+        elif call[0] == "frame":
+            episodes[-1][1].append(call[1])
+        else:
+            episodes[-1].append(call)
+    return [tuple(e) for e in episodes]
 
 
 def test_record_calls_episode_hooks_around_each_saved_episode(tmp_path, monkeypatch):
@@ -290,7 +304,15 @@ def test_record_calls_episode_hooks_around_each_saved_episode(tmp_path, monkeypa
     dataset = record(cfg)
 
     root = dataset.root
-    assert calls == [("start", 0, root), ("end", True), ("start", 1, root), ("end", True)]
+    episodes = _episodes(calls)
+    assert [(e[0], e[2]) for e in episodes] == [
+        (("start", 0, root), ("end", True)),
+        (("start", 1, root), ("end", True)),
+    ]
+    # Every stored frame is announced, in order, and nothing else is.
+    lengths = [len(e[1]) for e in episodes]
+    assert all(n > 0 for n in lengths) and sum(lengths) == dataset.num_frames
+    assert all(e[1] == list(range(len(e[1]))) for e in episodes)
 
 
 def test_record_reports_a_rerecorded_episode_as_not_saved(tmp_path, monkeypatch):
@@ -302,5 +324,12 @@ def test_record_reports_a_rerecorded_episode_as_not_saved(tmp_path, monkeypatch)
     dataset = record(cfg)
 
     root = dataset.root
-    assert calls == [("start", 0, root), ("end", False), ("start", 0, root), ("end", True)]
+    episodes = _episodes(calls)
+    assert [(e[0], e[2]) for e in episodes] == [
+        (("start", 0, root), ("end", False)),
+        (("start", 0, root), ("end", True)),
+    ]
+    # The discarded take announced its frames too; the retake counts from 0 again.
+    assert all(e[1] == list(range(len(e[1]))) and len(e[1]) > 0 for e in episodes)
+    assert len(episodes[1][1]) == dataset.num_frames
     assert dataset.num_episodes == 1
